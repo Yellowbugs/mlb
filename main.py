@@ -111,3 +111,4 @@ n_days_ago = re.sub(r'(\d{4})-(\d{1,2})-(\d{1,2})', '\\2/\\3/\\1', str(today - t
 #print(today)
 #print(datex, n_days_ago)
 simulateday(str(today),statsapi.schedule(date=str(today)), datex, n_days_ago)
+close = input("press enter to close")
