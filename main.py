@@ -101,8 +101,11 @@ def simulateday(date,today,datex, startdate):
             print("play: ", play)
             
 
-
-today = date.today()    
+userChoice = input("today(1) or tomorrow(2)?")
+if userChoice == '2':
+    today = date.today() + timedelta(days=1)
+else:
+    today = date.today()  
 datex = re.sub(r'(\d{4})-(\d{1,2})-(\d{1,2})', '\\2/\\3/\\1', str(today))
 n_days_ago = re.sub(r'(\d{4})-(\d{1,2})-(\d{1,2})', '\\2/\\3/\\1', str(today - timedelta(days=10)))
 #print(today)
