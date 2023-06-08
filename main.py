@@ -39,11 +39,15 @@ teamIds = {
 
 }
 projections = {}
+import openpyxl
+
+
+workbook = openpyxl.load_workbook('data.xlsx')
 
 client = OddsApiClient(api_key='b664d59f43cfee882082f8fb86a1c478')
 
-def simulateday(date,today,datex, startdate):
-    for i in today:
+def simulateday(date,schedule,datex, startdate, isToday):
+    for i in schedule:
         gameCount = 0
         totalRuns = 0
         teamId = teamIds[str(i['home_name'])]
@@ -51,13 +55,12 @@ def simulateday(date,today,datex, startdate):
         for x in games:
             if x['status'] == 'Final':
                 gameCount = gameCount + 1
-                #print(x['summary'])
-                #print(x['home_score'] + x['away_score'])
+
                 totalRuns = totalRuns + x['home_score'] + x['away_score']
         prediction = totalRuns/gameCount
         projections.update({i['home_name']: prediction})
 
-    for i in today:
+    for i in schedule:
         gameCount = 0
         totalRuns = 0
         teamId = teamIds[str(i['away_name'])]
@@ -65,17 +68,32 @@ def simulateday(date,today,datex, startdate):
         for x in games:
             if x['status'] == 'Final':
                 gameCount = gameCount + 1
-                #print(x['summary'])
-                #print(x['home_score'] + x['away_score'])
                 totalRuns = totalRuns + x['home_score'] + x['away_score']
         prediction = totalRuns/gameCount
         projections.update({i['away_name']: prediction})
+    if isToday:
+        compareOdds(date)
+    else:
+        num = 0
+        sheet = workbook.create_sheet(title=date)
+        for i in schedule:
+            num = num + 1
+            print("game: " , str(i['home_name']), " vs ",str(i['away_name']))
+            projectedTotal = ((projections[str(i['home_name'])]+projections[str(i['away_name'])])/2)-0.38
+            print("projected total: " , projectedTotal)
+            sheet["A"+str(num)] = str(i['home_name'])+ " vs "+ str(i['away_name'])
+            sheet["B"+str(num)] = projectedTotal
+
+
+
+def compareOdds(date):
     odds_response = requests.get('https://api.the-odds-api.com/v3/odds', params={
         'api_key': 'b664d59f43cfee882082f8fb86a1c478',
         'sport': 'baseball_mlb',
         'region': 'us', # uk | us | eu | au
         'oddsFormat': 'american',
         "mkt": "totals",
+        'date': date + 'T12:00:00Z',
         "bookmakers": [
             {
             "key": "draftkings",
@@ -83,32 +101,53 @@ def simulateday(date,today,datex, startdate):
     
         }]
     })
-    print('date: ', datex)
     odds_json = json.loads(odds_response.text)
+    solidPlays = []
     for x in range(len(odds_json['data'])):
         dt = datetime.datetime.fromtimestamp(odds_json['data'][x]['commence_time'])
         iso_format = dt.isoformat()
         if iso_format[:10] == date:
+            print("-----------------------------------")
             print("game: " , odds_json['data'][x]['teams'])
             odds = odds_json['data'][x]['sites'][0]['odds']['totals']['points'][0]
             print("odds: " , odds)
-            projectedTotal = (projections[str(odds_json['data'][x]['teams'][0])]+projections[str(odds_json['data'][x]['teams'][1])])/2
+            projectedTotal = ((projections[str(odds_json['data'][x]['teams'][0])]+projections[str(odds_json['data'][x]['teams'][1])])/2)-0.38
             print("projected total: " , projectedTotal)
-            if projectedTotal <= odds:
+            if projectedTotal <= float(odds):
                 play = "under"
             else:
                 play = "over"
             print("play: ", play)
-            
-
-userChoice = input("today(1) or tomorrow(2)?")
+            if float(odds) - projectedTotal <= 0.5 and float(odds) - projectedTotal >= -0.5:
+                solidPlays.append("game: " + str(odds_json['data'][x]['teams']))
+                solidPlays.append("odds: " + str(odds))
+                solidPlays.append("projected total: " + str(projectedTotal))
+                solidPlays.append("play: " + str(play))
+                solidPlays.append("-----------------------------------")
+    print("-----------------------------------")
+    print("")
+    print("")
+    print("")
+    print("SOLID PLAYS")
+    print("-----------------------------------")
+    for plays in solidPlays:
+        
+        print(plays)
+        
+userChoice = input("today(1) or past day(2)?")
 if userChoice == '2':
-    today = date.today() + timedelta(days=1)
+    month = input('month: ')
+    day = input('day: ')
+    today = datetime.date(2023, int(month), int(day))
+    isToday = False
 else:
     today = date.today()  
-datex = re.sub(r'(\d{4})-(\d{1,2})-(\d{1,2})', '\\2/\\3/\\1', str(today))
-n_days_ago = re.sub(r'(\d{4})-(\d{1,2})-(\d{1,2})', '\\2/\\3/\\1', str(today - timedelta(days=10)))
+    isToday = True
+datex = re.sub(r'(\d{4})-(\d{1,2})-(\d{1,2})', '\\2/\\3/\\1', str(today - timedelta(days=1)))
+n_days_ago = re.sub(r'(\d{4})-(\d{1,2})-(\d{1,2})', '\\2/\\3/\\1', str(today - timedelta(days=8)))
 #print(today)
-#print(datex, n_days_ago)
-simulateday(str(today),statsapi.schedule(date=str(today)), datex, n_days_ago)
+print(datex)
+print(n_days_ago)
+simulateday(str(today),statsapi.schedule(date=str(today)), datex, n_days_ago, isToday)
+workbook.save(filename="data.xlsx")
 close = input("press enter to close")
